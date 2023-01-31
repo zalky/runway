@@ -20,18 +20,18 @@ With this library:
    management of your running application:
    - Uses a fork of
      [`clojure.tools.namespace`](https://github.com/zalky/tools.namespace)
-     that fixes [`TNS-6`](https://clojure.atlassian.net/browse/TNS-6),
-     which greatly improves c.t.n robustness (a patch has been
-     submitted).
+     (c.t.n.) that fixes
+     [`TNS-6`](https://clojure.atlassian.net/browse/TNS-6), which
+     greatly improves c.t.n robustness (a patch has been submitted)
    - The provided implementation is for a `com.stuartsierra.component`
      system. However it can be [extended for any arbitrary build
      framework](#other-framework).
    - Choose how to reload dependent namespaces: eagerly or lazily
    - Uses the new cross-platform [Axle](https://github.com/zalky/axle)
-     watcher that replaces [Hawk](https://github.com/wkf/hawk)
-     (performs much better on newer Macs and newer versions of Java)
-   - More robust error handling and logging during component lifecycle
-     methods
+     watcher (performs much better on newer Macs and newer versions of
+     Java)
+   - More robust error handling, recovery and logging during component
+     lifecycle methods
    - Cleanly shutdown your application on interrupt signals
 
 ### About Reloaded Workflows
@@ -41,9 +41,9 @@ can be difficult to implement and there are a number of
 [known pitfalls](https://github.com/clojure/tools.namespace#warnings-and-potential-problems)
 with when using `clojure.tools.namespace`.
 
-However, some of these can be mitigated, and other are not specific to
-reloaded workflows and are things that you need to worry about in any
-live coding environment. Meanwhile, the benefits that reloaded
+However, some of these can be mitigated, and others are not specific
+to reloaded workflows and are things that you need to worry about in
+any live coding environment. Meanwhile, the benefits that reloaded
 workflows bring are significant, especially when live coding alongside
 large, running applications. Having automated, enforced heuristics for
 how an application behaves as your code changes allows you to a priori
@@ -67,9 +67,10 @@ implementation to do it.
    - [Source Directories](#source)
    - [Reload Heuristics](#reload-heuristics)
    - [Component Lifecycles](#lifecycles)
-   - [On Errors](#errors)
+   - [Errors Handling and Recover](#errors)
    - [Logging](#logging)
 6. [System Definition](#system-def)
+   - [Example System](#example-system)
    - [System Component Library](#system-components)
 7. [Main Invocation](#main)
 8. [Other Build Frameworks](#other-framework)
@@ -77,8 +78,9 @@ implementation to do it.
 
 ## Quick Start <a name="quick-start"></a>
 
-Assuming that at minimum you want an nREPL and a code watcher, put the
-following in your `deps.edn` file:
+Let's say you want to start two concurrent tasks in the same runtime:
+an nREPL server and a code watcher. Just put the following in your
+`deps.edn` file:
 
 ```clj
 {:deps    {io.zalky/runway {:mvn/version "0.2.0"}}
@@ -90,19 +92,40 @@ following in your `deps.edn` file:
                      :exec-args  {runway.core/watcher {}}}}}
 ```
 
-You can then start either:
+Then you can then run either a single task:
 
 ```
 clojure -X:repl
 ```
 
-Or both concurrently
+Or both concurrently:
 
 ```
 clojure -X:repl:watcher
 ```
 
-If you use cider you might additionally want to include some nREPL
+With normal `-X` invocation, only one function is ever run. However
+when that function is `runway.core/exec`, it collects and runs any
+number of _other_ functions defined in your aliases via merge
+semantics. Combined with other Runway features this provides a modular
+and flexible approach to what is executed in your runtime.
+
+Note that this minimal example does not start a running application
+for you to live code along-side. The next section explains how to do
+that.
+
+Also, make sure you have read the [simple guidelines](#reload) on how
+to make your code reloading experience more robust. But TL;DR:
+
+1. Do not move your REPL into a namespace backed by a Clojure file on
+   the classpath, ex: `(in-ns 'ns.backed.by.my.clojure.file)`
+
+2. Instead require and alias any namespaces you want to use in your
+   REPL namespace
+
+3. No AOT compile, no defonce
+
+Additionally, if you use Cider you might want to include some nREPL
 middleware in your `:repl` alias dependencies:
 
 ```clj
@@ -110,28 +133,15 @@ cider/cider-nrepl {:mvn/version "0.28.5"}   ; or whatever your cider version is
 refactor-nrepl/refactor-nrepl {:mvn/version "3.5.5"}
 ```
 
-Note that the above will not start a running application for you to
-live code with. Read on for how to do that.
-
-Also, make sure you have read the [simple guidelines](#reload) on how
-to make your reloaded REPL experience more robust. But TL;DR:
-
-1. Do not move your REPL into a namespace backed by a Clojure file on
-   the classpath
-
-2. Always require and alias any namespaces you want to use in your
-   REPL
-
-3. No AOT compile, no defonce
-
 ## Concurrent Functions <a name="concurrent"></a>
 
 Runway provides a means to run multiple concurrent functions via deps
 aliases. This is mostly useful when these concurrent functions need
 access to the same runtime, otherwise you would just run them as
-separate processes. Lets say you want to start an application server,
-an nrepl server, and a file watcher to reload code. Runway provides
-three functions that do this for you.
+separate processes. Lets say you want to start a
+`com.stuartsierra.component` based application server, an nREPL
+server, and a file watcher to reload code. Runway already provides
+three built-in functions that do this for you.
 
 Just configure a `deps.edn` that looks like the following:
 
@@ -147,7 +157,9 @@ Just configure a `deps.edn` that looks like the following:
 ```
 
 The `:exec-args` of each alias define a set of function symbol and
-argument pairs. If you now run:
+argument pairs. Here, the `:dev` alias defines both an nREPL server
+and a code watcher task, and the `:server` alias defines an
+application server. If you now run:
 
 ```
 clojure -X:dev:server
@@ -157,7 +169,7 @@ Clojure will first merge those aliases according to the normal
 semantics of -X invocation, and then pass their combined `:exec-args`
 map to `runway.core/exec`. Runway will then locate the functions
 declared in the combined `:exec-args` maps, load their namespaces, and
-run them concurrently with their respective arguments.
+run each of them concurrently with their respective arguments.
 
 Effectively the alias that gets run is:
 
@@ -182,8 +194,8 @@ should not be run. Take the alias:
                    :exec-args {runway.core/watcher false}}}
 ```
 
-This is useful if you want an easy way to disable something in other
-aliases. The following will be merged in order:
+This can be used to disable the watcher in other aliases. The
+following will be merged in order:
 
 ```
 clojure -X:dev:server:watcher/disable
@@ -446,7 +458,7 @@ guidelines are all you need to help mitigate pitfalls:
    While you work, Runway will keep your aliases and refers your REPL
    namespaces consistent with the changing namespace graph.
 
-2. Always require and alias any namespace you want to use in your
+2. Instead require and alias any namespace you want to use in your
    REPL. If you find yourself regularly requiring a common set of
    namespaces see here for [how to automate this](#repl-auto-setup).
 
@@ -597,9 +609,9 @@ namespaces, or performing any other kind of workflow to set up your
 REPL environment, simply set up a namespace like so:
 
 ```clj
-(ns dev.repl) ; Call it anything, just not your REPL namespace
+(ns dev.repl) ; The namespace for this file, NOT your REPL namespace
 
-(ns user)   ; Here is your REPL namespace
+(ns user)     ; Here is your REPL namespace
 
 (require '[my.project.admin :as admin]
          '[my.project.auth :as auth]
@@ -623,7 +635,9 @@ REPL environment, simply set up a namespace like so:
 The key thing here is that the location of this file on the classpath,
 for example `<classpath>/dev/repl.clj`, does not map to your REPL
 namespace. So if your REPL namespace is `user`, you do not want this
-file to be `<classpath>/user.clj`.
+file to be `<classpath>/user.clj`. You want to make sure that your
+REPL namespace `user` is not backed by a file, so that it plays well
+with c.t.n.
 
 Then ensure this namespace is loaded by the appropriate `deps.edn`
 alias:
@@ -634,31 +648,33 @@ alias:
                      cider/cider-nrepl             {:mvn/version "0.28.5"} ; optional
                      refactor-nrepl/refactor-nrepl {:mvn/version "3.5.5"}} ; optional
        :exec-fn     runway.core/exec
-       :exec-args   {runway.nrepl/server {}
-                     runway.core/watcher {}
-                     dev.repl            true}}}    ; <- loaded here
+       :exec-args   {runway.nrepl/server {}         ; concurrent run fn
+                     runway.core/watcher {}         ; concurrent run fn
+                     dev.repl            true}}}    ; <- ns loaded here
 ```
 
-When working with a team, you'll usually want to put this in your
-personal `~/.clojure/deps.edn`, because things like REPL configuration
-are going to be fairly specifc do to each individual. But given the
-flexibility Runway gives you to merge and run aliases, you have an
-endless number of ways to do so:
+When working with a team, you'll usually want to put your REPL config
+in your personal `~/.clojure/deps.edn`, because REPL workflows are
+fairly user specific. But given the flexibility Runway gives you to
+merge and run aliases, you have an endless number of ways to do so:
 
 ```clj
-{:repl/datomic       {:exec-fn   runway.core/exec
+{:repl/config        {:extra-paths ["path/to/"]
+                      :exec-fn     runway.core/exec
+                      :exec-args   {dev.repl true}}
+ :repl/datomic       {:exec-fn   runway.core/exec
                       :exec-args {dev.repl.db true}}
  :repl/elasticsearch {:exec-fn   runway.core/exec
                       :exec-args {dev.repl.elasticsearch true}}
  ...}
 ```
 
-Note that if you update the above `dev.repl` namespace, the watcher
-will see this, reload it, and automatically reconfigure your REPL. But
-remember, this approach is _only_ for setting up your REPL. The
-evaluation of `dev.repl` should not produce stateful side-effects in
-your actual application. This is what `com.stuartsierra.component` is
-for.
+Note that if you update the above `dev.repl` config namespace, the
+watcher will see this, reload it, and automatically reconfigure your
+REPL. But remember, this approach is _only_ for setting up your REPL
+environment. The evaluation of `dev.repl` should not produce stateful
+side-effects in your actual application. This is what
+`com.stuartsierra.component` is for.
 
 ### Source Directories <a name="source"></a>
 
@@ -765,13 +781,14 @@ application from the REPL with:
 (run/restart)
 ```
 
-If you need acces to your running application during live coding, it
+If you need access to your running application during live coding, it
 resides in the `runway.core/system` var. But remember, never access
-this var or its contents outside of your REPL work: doing so by-passes
-the component dependency graph and is considered a component
-anti-pattern.
+this var or its contents outside of your REPL work. For example, you
+never want to require or access this var in your application
+namespaces: doing so by-passes the component dependency graph and is
+considered a component anti-pattern.
 
-### On Errors <a name="errors"></a>
+### Error Handling and Recovery  <a name="errors"></a>
 
 Runway handles errors in each phase of a reload in different ways:
 
@@ -781,11 +798,11 @@ Runway handles errors in each phase of a reload in different ways:
 
 2. **Component failed `stop` lifecycle**: Runway will abort stopping
    the problem component, but attempt to recover by stopping all other
-   components that are not transitive dependents of the problem
-   component (these should already have been stopped).
+   components that are _not_ transitive dependents of the problem
+   component (transitive dependents should already have been stopped).
 
 3. **Namespace reloading failed**: Runway will not restart the running
-   application until all errors have been resolved.
+   application until all namespace compile errors have been resolved.
 
 ### Logging <a name="logging"></a>
 
@@ -826,7 +843,8 @@ Here `->Dependency` is any constructor function that when applied to
 its arguments `arg1 arg2`, returns a component that implements the
 `com.stuartsierra.component/Lifecycle` protocol.
 
-Defined as such, you can easily re-combine systems in arbitrary ways:
+Defined as such, you can easily re-combine systems according to merge
+semantics in arbitrary ways:
 
 ```clj
 (def fullstack-components
@@ -848,9 +866,27 @@ Defined as such, you can easily re-combine systems in arbitrary ways:
   (run/assemble-system fullstack-components fullstack-dependencies))
 ```
 
+While a simple `merge` will work on the components maps, note the use
+of the `run/merge-deps` on the dependency maps.
+
+### Example System <a name="example-system"></a>
+
+There are a set of stub components assembled into an example system in
+the
+[`runway.build`](https://github.com/zalky/runway/blob/main/build/runway/build.clj)
+namespace. You can run this example system using:
+
+```sh
+clojure -X:server:dev
+```
+
+You can try updating the components to see how the code and the
+running system are reloaded.
+
 ### System Component Library <a name="system-components"></a>
 
-You can find a number of useful, ready made components in the
+You can find a number of useful, ready made components (ex:
+websockets, servers, loggers, etc...) in the excellent
 [System](https://github.com/danielsz/system) library.
 
 ## Main Invocation <a name="main"></a>
@@ -875,7 +911,7 @@ example you could write something like:
           @(promise)))))
 ```
 
-Here, `args` are CLI args meant for `runway.core/go` (at mininum
+Here, `args` are CLI args meant for `runway.core/go` (at minimum
 `--system my.project/app`), and not args to your running
 application. To configure your actual application, prefer environment
 variables, edn, or a configuration framework like Zookeeper.
@@ -883,13 +919,12 @@ variables, edn, or a configuration framework like Zookeeper.
 ## Other Build Frameworks <a name="other-framework"></a>
 
 The default build implementation provided by Runway is for
-`com.stuartsierra.component/SystemMap`. If you use some other build
-framework to start and stop your running application, simply wrap your
-system in a record that implements
-`com.stuartsierra.component/Lifecycle`, and
+`com.stuartsierra.component/SystemMap`. However other build frameworks
+can be wrapped to work with Runway. Simply wrap your system in a
+record that implements `com.stuartsierra.component/Lifecycle`, and
 `runway.core/IRecover`. You probably also want to set a custom
-`:restart-fn` watcher predicate. With the default `:restart-fn`
-predicate, Runway restarts your app whenever a direct dependent of
+`:restart-fn` watcher predicate. The default `:restart-fn` predicate
+restarts your app whenever a direct dependent of
 `com.stuartsierra.component` changes, which is probably not what you
 want for a non-Component build framework.
 
@@ -944,8 +979,9 @@ Something like this should work:
 
 There are five important things to note:
 
-1. On error you need to re-throw a component error. A component error
-   is of type `clojure.lang.ExceptionInfo` and contains at minimum:
+1. On error you need to re-throw a `com.stuartsierra.component`
+   compatible error. A component error is of type
+   `clojure.lang.ExceptionInfo` and contains at minimum:
 
    - `:system-key`: This is the failed component id
    - `:system`: This is the failed implementation system, wrapped in a
@@ -980,8 +1016,15 @@ There are five important things to note:
 
 5. Make sure you do not accidentally double wrap the component.
 
-See `runway.wrapped` for a working stub that implements this full
-pattern where the other "framework" is just a simple map.
+See
+[`runway.wrapped`](https://github.com/zalky/runway/blob/main/build/runway/wrapped.clj)
+for a working stub that implements this full pattern where the other
+"framework" is just a simple Clojure map. You can run this wrapped
+example system from the command line using:
+
+```clj
+clojure -X:server:dev '{runway.core/go {:system runway.wrapped/wrapped-app}}'
+```
 
 ## License <a name="license"></a>
 

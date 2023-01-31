@@ -1,5 +1,5 @@
 
-version-number  = 0.2.0
+version-number  = 0.2.1
 group-id        = io.zalky
 artifact-id     = runway
 description     = Coding on the fly, with a tool.deps + component based reloadable build library

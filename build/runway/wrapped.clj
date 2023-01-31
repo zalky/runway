@@ -9,7 +9,7 @@
 ;; other implementation framework. In this case, the "framework" is
 ;; just a simple map.
 
-(defn- impl-throw-e
+(defn- impl-throw-ex
   [sys lifecycle]
   (throw (ex-info "Impl system error"
                   {:impl-failed-id ::impl-component
@@ -18,8 +18,9 @@
 
 (defn- impl-start-fn
   [sys]
-  ;; Simulate a lifecycle error in the impl system here
-  ;; (impl-throw-e sys #'impl-start-fn)
+  ;; Simulate a lifecycle error in the impl system here by
+  ;; un-commenting the following line:
+  ;; (impl-throw-ex sys #'impl-start-fn)
   (log/info "Impl system started")
   (assoc sys :state ::started))
 
@@ -38,40 +39,43 @@
 ;; So we make a component wrapper
 
 (defn- get-failed-id
-  [e]
-  (:impl-failed-id (ex-data e)))
+  [ex]
+  (:impl-failed-id (ex-data ex)))
 
 (defn- get-failed-system
-  [e]
-  (:impl-system (ex-data e)))
+  [ex]
+  (:impl-system (ex-data ex)))
 
 (defn- get-error-msg
-  [e]
+  [ex]
   (let [{k   :impl-failed-id
          f   :impl-lifecycle
-         sys :impl-system} (ex-data e)
+         sys :impl-system} (ex-data ex)
         name               (platform/type-name sys)]
     (-> "Wrapped error in component %s in system %s calling %s"
         (format k name f))))
 
 (declare ->ComponentWrapper)
 
-(defn- impl-e->component-e
+(defn- impl-ex->component-ex
   "Unpack data from impl system exception and convert to a component
   exception."
-  [e lifecycle]
-  (let [id  (get-failed-id e)
-        sys (get-failed-system e)]
-    (ex-info (get-error-msg e)
+  [ex lifecycle]
+  (let [id  (get-failed-id ex)
+        sys (get-failed-system ex)]
+    (ex-info (get-error-msg ex)
              ;; Must wrap failed impl system in component
              {:system-key id
               :system     (->ComponentWrapper sys)
               :function   lifecycle}
-             e)))
+             ex)))
 
 (defn- impl-recoverable-subsystem
   "Given a failed impl system, we return a subsystem that can be
-  recovered by calling the impl stop lifecycle method."
+  recovered by calling the impl stop lifecycle method. Here you are
+  resolving some problem, or possibly excising the parts of the system
+  that have failed and are unrecoverable from the parts that can be
+  cleanly stopped."
   [sys]
   (assoc sys :recoverable true))
 
@@ -84,17 +88,17 @@
   (start [_]
     (try
       (->ComponentWrapper (impl-start-fn impl-system))
-      (catch Throwable impl-e
-        (-> impl-e
-            (impl-e->component-e #'component/start)
+      (catch Throwable impl-ex
+        (-> impl-ex
+            (impl-ex->component-ex #'component/start)
             (throw)))))
 
   (stop [_]
     (try
       (->ComponentWrapper (impl-stop-fn impl-system))
-      (catch Throwable impl-e
-        (-> impl-e
-            (impl-e->component-e #'component/stop)
+      (catch Throwable impl-ex
+        (-> impl-ex
+            (impl-ex->component-ex #'component/stop)
             (throw)))))
 
   run/Recover
@@ -105,7 +109,7 @@
         (->ComponentWrapper))))
 
 (defn wrapped-app
-  "Passed to runway.core/go"
+  "Passed to runway.core/go. See the deps.edn file for where that is."
   []
   (->ComponentWrapper
    ;; Replace run/assemble-system with impl framework's constructor.
