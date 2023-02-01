@@ -1,7 +1,7 @@
 {:deps    {beckon/beckon              {:mvn/version "0.1.1"}
            com.stuartsierra/component {:mvn/version "1.1.0"}
            com.taoensso/timbre        {:mvn/version "5.2.1"}
-           io.zalky/axle              {:mvn/version "0.2.0"}
+           io.zalky/axle              {:mvn/version "0.2.1"}
            io.zalky/cinch             {:mvn/version "0.1.0"}
            org.clojure/clojure        {:mvn/version "1.11.1"}
            org.clojure/tools.cli      {:mvn/version "1.0.206"}
