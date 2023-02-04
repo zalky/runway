@@ -67,7 +67,7 @@ implementation to do it.
    - [Source Directories](#source)
    - [Reload Heuristics](#reload-heuristics)
    - [Component Lifecycles](#lifecycles)
-   - [Errors Handling and Recover](#errors)
+   - [Error Handling and Recovery](#errors)
    - [Logging](#logging)
 6. [System Definition](#system-def)
    - [Example System](#example-system)
