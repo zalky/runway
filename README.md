@@ -83,7 +83,7 @@ an nREPL server and a code watcher. Just put the following in your
 `deps.edn` file:
 
 ```clj
-{:deps    {io.zalky/runway {:mvn/version "0.2.0"}}
+{:deps    {io.zalky/runway {:mvn/version "0.2.2"}}
  :paths   ["src"]
  :aliases {:repl    {:extra-deps {nrepl/nrepl {:mvn/version "0.8.3"}}
                      :exec-fn    runway.core/exec
@@ -146,7 +146,7 @@ three built-in functions that do this for you.
 Just configure a `deps.edn` that looks like the following:
 
 ```clj
-{:deps    {io.zalky/runway {:mvn/version "0.2.0"}}
+{:deps    {io.zalky/runway {:mvn/version "0.2.2"}}
  :paths   ["src"]
  :aliases {:dev    {:extra-deps {nrepl/nrepl {:mvn/version "0.8.3"}}
                     :exec-fn    runway.core/exec
@@ -298,7 +298,7 @@ Qualified symbols are interpreted as a run functions by
 namespaces to load. Given:
 
 ```clj
-{:deps    {io.zalky/runway {:mvn/version "0.2.0"}}
+{:deps    {io.zalky/runway {:mvn/version "0.2.2"}}
  :paths   ["src"]
  :aliases {:server {:exec-fn   runway.core/exec
                     :exec-args {runway.core/go   {:system my.project/app}
@@ -340,7 +340,7 @@ additional env variables into `environ.core/env` using the
 `:exec-args` maps in your `deps.edn` aliases:
 
 ```clj
-{:deps    {io.zalky/runway {:mvn/version "0.2.0"}
+{:deps    {io.zalky/runway {:mvn/version "0.2.2"}
            environ/environ {:mvn/version "1.2.0"}}
  :paths   ["src"]
  :aliases {:dev         {:extra-deps {nrepl/nrepl {:mvn/version "0.8.3"}}
