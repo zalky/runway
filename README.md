@@ -605,8 +605,7 @@ options:
 ### Auto REPL Configuration <a name="repl-auto-setup"></a>
 
 If you find yourself regularly requiring and aliasing a common set of
-namespaces, or performing any other kind of workflow to set up your
-REPL environment, simply set up a namespace like so:
+namespaces simply set up a namespace like so:
 
 ```clj
 (ns dev.repl) ; The namespace for this file, NOT your REPL namespace
@@ -626,10 +625,6 @@ REPL environment, simply set up a namespace like so:
          '[runway.core :as run]
          '[taoensso.timbre :as log]
          '[taoensso.nippy :as nippy])
-
-(defn my-repl-workflow-helper
-  [arg]
-  ...)
 ```
 
 The key thing here is that the location of this file on the classpath,
