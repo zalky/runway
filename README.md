@@ -22,7 +22,8 @@ With this library:
      [`clojure.tools.namespace`](https://github.com/zalky/tools.namespace)
      (c.t.n.) that fixes
      [`TNS-6`](https://clojure.atlassian.net/browse/TNS-6), which
-     greatly improves c.t.n robustness (a patch has been submitted)
+     greatly improves c.t.n robustness (a patch has been submitted and
+     approved)
    - The provided implementation is for a `com.stuartsierra.component`
      system. However it can be [extended for any arbitrary build
      framework](#other-framework).
